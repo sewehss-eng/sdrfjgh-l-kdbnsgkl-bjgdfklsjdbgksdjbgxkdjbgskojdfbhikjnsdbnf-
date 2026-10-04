@@ -270,7 +270,7 @@ def admin_channel_card_kb(channel_id: int, has_links: bool = True) -> InlineKeyb
                 text="✍️ Указать дни", callback_data=f"adm:link_custom:{channel_id}"
             )
         ],
-        [InlineKeyboardButton(text="📝 Цена, описание и фото", callback_data=f"adm:ch_info:{channel_id}")],
+        [InlineKeyboardButton(text="📝 Цена, описание и расписание", callback_data=f"adm:ch_info:{channel_id}")],
         [InlineKeyboardButton(text="🧾 Созданные ссылки", callback_data=f"adm:ch_links:{channel_id}")],
         [InlineKeyboardButton(text="⬅️ К списку каналов", callback_data="adm:ch_list")],
     ]

@@ -47,7 +47,6 @@ CREATE TABLE IF NOT EXISTS channels (
     emoji        TEXT NOT NULL DEFAULT '📢',
     price        INTEGER NOT NULL DEFAULT 0,
     description  TEXT NOT NULL DEFAULT '',
-    image_file_id TEXT NOT NULL DEFAULT '',
     schedule_file_id TEXT NOT NULL DEFAULT '',
     invite_link  TEXT NOT NULL DEFAULT '',
     created_at   TEXT NOT NULL
@@ -122,7 +121,6 @@ class Database:
         existing = {column["name"] for column in channel_columns}
         for name, definition in (
             ("description", "TEXT NOT NULL DEFAULT ''"),
-            ("image_file_id", "TEXT NOT NULL DEFAULT ''"),
             ("schedule_file_id", "TEXT NOT NULL DEFAULT ''"),
         ):
             if name not in existing:
@@ -246,19 +244,18 @@ class Database:
         emoji: str = "📢",
         price: int = 0,
         description: str = "",
-        image_file_id: str = "",
         schedule_file_id: str = "",
     ) -> int:
         cur = await self._conn.execute(
             """
             INSERT INTO channels (
                 category_id, chat_id, username, title, emoji, price,
-                description, image_file_id, schedule_file_id, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                description, schedule_file_id, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 category_id, chat_id, username, title, emoji, price,
-                description, image_file_id, schedule_file_id, _now(),
+                description, schedule_file_id, _now(),
             ),
         )
         await self._conn.commit()
@@ -286,12 +283,11 @@ class Database:
 
     async def update_channel_info(
         self, channel_id: int, price: int, description: str,
-        image_file_id: str = "", schedule_file_id: str = "",
+        schedule_file_id: str = "",
     ) -> None:
         await self._exec(
-            "UPDATE channels SET price = ?, description = ?, image_file_id = ?, "
-            "schedule_file_id = ? WHERE id = ?",
-            (price, description, image_file_id, schedule_file_id, channel_id),
+            "UPDATE channels SET price = ?, description = ?, schedule_file_id = ? WHERE id = ?",
+            (price, description, schedule_file_id, channel_id),
         )
 
     async def set_invite_link(self, channel_id: int, invite_link: str) -> None:

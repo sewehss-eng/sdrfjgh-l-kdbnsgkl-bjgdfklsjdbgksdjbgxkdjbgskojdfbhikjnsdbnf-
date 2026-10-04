@@ -162,13 +162,17 @@ async def channel_view(call: CallbackQuery) -> None:
             invite_link = await get_or_create_channel_link(call.bot, ch["chat_id"], channel_id)
         except Exception as e:
             log.error("Не удалось создать ссылку для канала %s: %s", channel_id, e)
-    await call.message.edit_text(
-        text, reply_markup=channel_category_back_kb(ch["category_id"], invite_link)
-    )
-    if ch["image_file_id"]:
-        await call.message.answer_photo(ch["image_file_id"], caption="🖼 Изображение курса")
+    markup = channel_category_back_kb(ch["category_id"], invite_link)
     if ch["schedule_file_id"]:
-        await call.message.answer_photo(ch["schedule_file_id"], caption="🗓 Расписание курса")
+        try:
+            await call.message.delete()
+        except Exception:
+            pass
+        await call.message.answer_photo(
+            ch["schedule_file_id"], caption=text, reply_markup=markup
+        )
+    else:
+        await call.message.edit_text(text, reply_markup=markup)
     await call.answer()
 
 

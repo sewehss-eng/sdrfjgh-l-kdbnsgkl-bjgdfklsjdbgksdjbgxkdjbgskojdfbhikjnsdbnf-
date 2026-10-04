@@ -63,14 +63,12 @@ class AddChannel(StatesGroup):
     waiting_category = State()
     waiting_price = State()
     waiting_description = State()
-    waiting_image = State()
     waiting_schedule = State()
 
 
 class ChannelInfo(StatesGroup):
     price = State()
     description = State()
-    image = State()
     schedule = State()
 
 
@@ -533,15 +531,6 @@ async def ch_add_description(message: Message, state: FSMContext) -> None:
     if not _is_admin(message.from_user.id):
         return
     await state.update_data(description="" if message.text == "/skip" else (message.text or ""))
-    await state.set_state(AddChannel.waiting_image)
-    await message.answer("Отправьте картинку курса или /skip:")
-
-
-@admin_router.message(AddChannel.waiting_image)
-async def ch_add_image(message: Message, state: FSMContext) -> None:
-    if not _is_admin(message.from_user.id):
-        return
-    await state.update_data(image_file_id=message.photo[-1].file_id if message.photo else "")
     await state.set_state(AddChannel.waiting_schedule)
     await message.answer("Отправьте картинку с расписанием или /skip:")
 
@@ -558,7 +547,7 @@ async def ch_add_schedule(message: Message, state: FSMContext) -> None:
     channel_id = await db.add_channel(
         category_id=data["category_id"], chat_id=data["chat_id"], title=data["title"],
         username=data.get("username", ""), price=data.get("price", 0),
-        description=data.get("description", ""), image_file_id=data.get("image_file_id", ""),
+        description=data.get("description", ""),
         schedule_file_id=data["schedule_file_id"],
     )
     await db.delete_pending_channel(data["chat_id"])
@@ -599,15 +588,8 @@ async def ch_info_price(message: Message, state: FSMContext) -> None:
 @admin_router.message(ChannelInfo.description)
 async def ch_info_description(message: Message, state: FSMContext) -> None:
     await state.update_data(description="" if message.text == "/skip" else (message.text or ""))
-    await state.set_state(ChannelInfo.image)
-    await message.answer("Отправьте картинку курса или /skip:")
-
-
-@admin_router.message(ChannelInfo.image)
-async def ch_info_image(message: Message, state: FSMContext) -> None:
-    await state.update_data(image_file_id=message.photo[-1].file_id if message.photo else "")
     await state.set_state(ChannelInfo.schedule)
-    await message.answer("Отправьте расписание или /skip:")
+    await message.answer("Отправьте картинку с расписанием или /skip:")
 
 
 @admin_router.message(ChannelInfo.schedule)
@@ -615,7 +597,7 @@ async def ch_info_schedule(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     await db.update_channel_info(
         data["channel_id"], data.get("price", 0), data.get("description", ""),
-        data.get("image_file_id", ""), message.photo[-1].file_id if message.photo else "",
+        message.photo[-1].file_id if message.photo else "",
     )
     await state.clear()
     await message.answer("✅ Данные каталога обновлены.", reply_markup=admin_channel_card_kb(data["channel_id"]))
