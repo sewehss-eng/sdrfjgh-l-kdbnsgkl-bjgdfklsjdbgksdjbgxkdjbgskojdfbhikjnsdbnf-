@@ -18,6 +18,7 @@ from keyboards import (
     access_list_kb,
     back_to_main_kb,
     categories_kb,
+    channel_category_back_kb,
     channel_links_kb,
     fmt_date,
     main_menu_kb,
@@ -111,7 +112,7 @@ async def catalog_open(call: CallbackQuery) -> None:
 
     for c in channels:
         acc = await db.get_access(call.from_user.id, c["id"])
-        item = {"title": c["title"], "emoji": c["emoji"]}
+        item = {"title": c["title"], "emoji": c["emoji"], "id": c["id"]}
         if acc and days_left(acc["expires_at"]) > 0:
             left = days_left(acc["expires_at"])
             rows.append(
@@ -129,9 +130,45 @@ async def catalog_open(call: CallbackQuery) -> None:
 
     text = (
         f"{cat['emoji']} <b>{cat['title']}</b>\n"
-        "─────────────────────\n" + "\n".join(rows)
+        "───────────────────\n" + "\n".join(rows)
     )
     await call.message.edit_text(text, reply_markup=channel_links_kb(items))
+    await call.answer()
+
+
+@user_router.callback_query(F.data.startswith("ch:view:"))
+async def channel_view(call: CallbackQuery) -> None:
+    channel_id = int(call.data.split(":")[2])
+    ch = await db.get_channel(channel_id)
+    if not ch:
+        await call.answer("Канал не найден", show_alert=True)
+        return
+    acc = await db.get_access(call.from_user.id, channel_id)
+    active = acc and days_left(acc["expires_at"]) > 0
+    price = f"{ch['price']} руб." if ch["price"] else "уточняйте у администратора"
+    text = (
+        f"{ch['emoji']} <b>{ch['title']}</b>\n"
+        "───────────────────\n"
+        f"💰 Цена: <b>{price}</b>\n"
+        f"\n{ch['description'] or 'Описание курса пока не добавлено.'}"
+    )
+    if active:
+        text += f"\n\n✅ Доступ активен до <b>{fmt_date(acc['expires_at'])}</b>"
+    elif acc:
+        text += "\n\n❌ Срок доступа истёк"
+    invite_link = None
+    if active:
+        try:
+            invite_link = await get_or_create_channel_link(call.bot, ch["chat_id"], channel_id)
+        except Exception as e:
+            log.error("Не удалось создать ссылку для канала %s: %s", channel_id, e)
+    await call.message.edit_text(
+        text, reply_markup=channel_category_back_kb(ch["category_id"], invite_link)
+    )
+    if ch["image_file_id"]:
+        await call.message.answer_photo(ch["image_file_id"], caption="🖼 Изображение курса")
+    if ch["schedule_file_id"]:
+        await call.message.answer_photo(ch["schedule_file_id"], caption="🗓 Расписание курса")
     await call.answer()
 
 
@@ -235,7 +272,7 @@ async def access_view(call: CallbackQuery) -> None:
     left = days_left(a["expires_at"])
     text = (
         f"{ch['emoji']} <b>{ch['title']}</b>\n"
-        "─────────────────────\n"
+        "───────────────────\n"
         f"📅 Доступ до: <b>{fmt_date(a['expires_at'])}</b>\n"
         f"⏳ Осталось: <b>{left} дн.</b>"
     )

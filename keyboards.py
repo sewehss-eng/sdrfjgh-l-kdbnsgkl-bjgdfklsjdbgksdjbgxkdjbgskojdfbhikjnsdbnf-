@@ -81,14 +81,23 @@ def categories_kb(categories) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=grid)
 
 
+def channel_category_back_kb(category_id: int, invite_link: str | None = None) -> InlineKeyboardMarkup:
+    rows = []
+    if invite_link:
+        rows.append([InlineKeyboardButton(text="🚀 Открыть канал", url=invite_link)])
+    rows.extend([
+        [InlineKeyboardButton(text="⬅️ Вернуться в категорию", callback_data=f"cat:open:{category_id}")],
+        [InlineKeyboardButton(text="🗂 Все категории", callback_data="cat:list")],
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 def channel_links_kb(channels) -> InlineKeyboardMarkup:
     """Меню пользователя: каналы категории. Если есть доступ — кнопка-ссылка."""
     kb = []
     for c in channels:
-        if c.get("invite_link"):
-            kb.append([InlineKeyboardButton(text=f"{c['emoji']} {c['title']} · войти", url=c["invite_link"])])
-        else:
-            kb.append([InlineKeyboardButton(text=f"{c['emoji']} {c['title']}", callback_data="noop")])
+        kb.append([InlineKeyboardButton(text=f"{c['emoji']} {c['title']}", callback_data=f"ch:view:{c['id']}")])
+    kb.append([InlineKeyboardButton(text="⬅️ Вернуться в категорию", callback_data="cat:list")])
     kb.append([InlineKeyboardButton(text="🏠 Главное меню", callback_data="home")])
     return InlineKeyboardMarkup(inline_keyboard=kb)
 
@@ -261,6 +270,7 @@ def admin_channel_card_kb(channel_id: int, has_links: bool = True) -> InlineKeyb
                 text="✍️ Указать дни", callback_data=f"adm:link_custom:{channel_id}"
             )
         ],
+        [InlineKeyboardButton(text="📝 Цена, описание и фото", callback_data=f"adm:ch_info:{channel_id}")],
         [InlineKeyboardButton(text="🧾 Созданные ссылки", callback_data=f"adm:ch_links:{channel_id}")],
         [InlineKeyboardButton(text="⬅️ К списку каналов", callback_data="adm:ch_list")],
     ]

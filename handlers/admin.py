@@ -61,6 +61,17 @@ class AddCategory(StatesGroup):
 class AddChannel(StatesGroup):
     waiting_forward = State()
     waiting_category = State()
+    waiting_price = State()
+    waiting_description = State()
+    waiting_image = State()
+    waiting_schedule = State()
+
+
+class ChannelInfo(StatesGroup):
+    price = State()
+    description = State()
+    image = State()
+    schedule = State()
 
 
 class CustomDays(StatesGroup):
@@ -489,24 +500,125 @@ async def ch_add_category(call: CallbackQuery, state: FSMContext) -> None:
         await state.clear()
         return
 
-    channel_id = await db.add_channel(
-        category_id=category_id,
-        chat_id=chat_id,
-        title=title,
-        username=username,
-    )
-    await db.delete_pending_channel(chat_id)
-    await state.clear()
-
+    await state.update_data(category_id=category_id)
+    await state.set_state(AddChannel.waiting_price)
     await call.message.edit_text(
-        f"✅ <b>Канал добавлен!</b>\n"
-        "─────────────────────\n"
-        f"🎓 {title}\n"
-        f"🆔 ID: <code>{channel_id}</code>\n\n"
-        "Теперь вы можете создать ссылку для выдачи доступа.",
-        reply_markup=admin_channel_card_kb(channel_id),
+        "Введите цену курса в рублях или /skip, если цена не указана:"
     )
     await call.answer()
+
+
+@admin_router.message(AddChannel.waiting_price)
+async def ch_add_price(message: Message, state: FSMContext) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+    value = (message.text or "").strip()
+    if value == "/skip":
+        price = 0
+    else:
+        try:
+            price = int(value)
+            if price < 0:
+                raise ValueError
+        except ValueError:
+            await message.answer("Введите целое число рублей или /skip:")
+            return
+    await state.update_data(price=price)
+    await state.set_state(AddChannel.waiting_description)
+    await message.answer("Отправьте описание курса или /skip:")
+
+
+@admin_router.message(AddChannel.waiting_description)
+async def ch_add_description(message: Message, state: FSMContext) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+    await state.update_data(description="" if message.text == "/skip" else (message.text or ""))
+    await state.set_state(AddChannel.waiting_image)
+    await message.answer("Отправьте картинку курса или /skip:")
+
+
+@admin_router.message(AddChannel.waiting_image)
+async def ch_add_image(message: Message, state: FSMContext) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+    await state.update_data(image_file_id=message.photo[-1].file_id if message.photo else "")
+    await state.set_state(AddChannel.waiting_schedule)
+    await message.answer("Отправьте картинку с расписанием или /skip:")
+
+
+@admin_router.message(AddChannel.waiting_schedule)
+async def ch_add_schedule(message: Message, state: FSMContext) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+    data = await state.get_data()
+    if message.photo:
+        data["schedule_file_id"] = message.photo[-1].file_id
+    else:
+        data["schedule_file_id"] = ""
+    channel_id = await db.add_channel(
+        category_id=data["category_id"], chat_id=data["chat_id"], title=data["title"],
+        username=data.get("username", ""), price=data.get("price", 0),
+        description=data.get("description", ""), image_file_id=data.get("image_file_id", ""),
+        schedule_file_id=data["schedule_file_id"],
+    )
+    await db.delete_pending_channel(data["chat_id"])
+    await state.clear()
+    await message.answer(
+        f"✅ <b>Канал добавлен!</b>\n🎓 {data['title']}\n🆔 ID: <code>{channel_id}</code>",
+        reply_markup=admin_channel_card_kb(channel_id),
+    )
+
+
+@admin_router.callback_query(F.data.startswith("adm:ch_info:"))
+async def ch_info_start(call: CallbackQuery, state: FSMContext) -> None:
+    if not await _admin_only(call):
+        return
+    channel_id = int(call.data.split(":")[2])
+    if not await db.get_channel(channel_id):
+        await call.answer("Канал не найден", show_alert=True)
+        return
+    await state.update_data(channel_id=channel_id)
+    await state.set_state(ChannelInfo.price)
+    await call.message.edit_text("Введите цену в рублях или /skip:", reply_markup=back_to_main_kb(True))
+    await call.answer()
+
+
+@admin_router.message(ChannelInfo.price)
+async def ch_info_price(message: Message, state: FSMContext) -> None:
+    try:
+        price = 0 if message.text == "/skip" else int(message.text)
+        if price < 0: raise ValueError
+    except (TypeError, ValueError):
+        await message.answer("Введите целое число рублей или /skip:")
+        return
+    await state.update_data(price=price)
+    await state.set_state(ChannelInfo.description)
+    await message.answer("Введите описание или /skip:")
+
+
+@admin_router.message(ChannelInfo.description)
+async def ch_info_description(message: Message, state: FSMContext) -> None:
+    await state.update_data(description="" if message.text == "/skip" else (message.text or ""))
+    await state.set_state(ChannelInfo.image)
+    await message.answer("Отправьте картинку курса или /skip:")
+
+
+@admin_router.message(ChannelInfo.image)
+async def ch_info_image(message: Message, state: FSMContext) -> None:
+    await state.update_data(image_file_id=message.photo[-1].file_id if message.photo else "")
+    await state.set_state(ChannelInfo.schedule)
+    await message.answer("Отправьте расписание или /skip:")
+
+
+@admin_router.message(ChannelInfo.schedule)
+async def ch_info_schedule(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    await db.update_channel_info(
+        data["channel_id"], data.get("price", 0), data.get("description", ""),
+        data.get("image_file_id", ""), message.photo[-1].file_id if message.photo else "",
+    )
+    await state.clear()
+    await message.answer("✅ Данные каталога обновлены.", reply_markup=admin_channel_card_kb(data["channel_id"]))
 
 
 @admin_router.callback_query(F.data.startswith("adm:ch_open:"))
@@ -520,7 +632,7 @@ async def ch_open(call: CallbackQuery) -> None:
         return
     await call.message.edit_text(
         f"{ch['emoji']} <b>{ch['title']}</b>\n"
-        "─────────────────────\n"
+        "───────────────────\n"
         f"🗂 Категория ID: {ch['category_id']}\n"
         f"🔗 Username: @{ch['username'] or '—'}\n"
         f"🆔 Chat ID: <code>{ch['chat_id']}</code>\n\n"

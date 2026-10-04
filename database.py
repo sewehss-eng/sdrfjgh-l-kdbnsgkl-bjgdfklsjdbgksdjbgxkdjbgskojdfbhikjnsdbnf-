@@ -46,6 +46,9 @@ CREATE TABLE IF NOT EXISTS channels (
     title        TEXT NOT NULL,
     emoji        TEXT NOT NULL DEFAULT '📢',
     price        INTEGER NOT NULL DEFAULT 0,
+    description  TEXT NOT NULL DEFAULT '',
+    image_file_id TEXT NOT NULL DEFAULT '',
+    schedule_file_id TEXT NOT NULL DEFAULT '',
     invite_link  TEXT NOT NULL DEFAULT '',
     created_at   TEXT NOT NULL
 );
@@ -115,6 +118,15 @@ class Database:
         ticket_columns = await self._q("PRAGMA table_info(tickets)")
         if "duration_minutes" not in {column["name"] for column in ticket_columns}:
             await self._conn.execute("ALTER TABLE tickets ADD COLUMN duration_minutes INTEGER")
+        channel_columns = await self._q("PRAGMA table_info(channels)")
+        existing = {column["name"] for column in channel_columns}
+        for name, definition in (
+            ("description", "TEXT NOT NULL DEFAULT ''"),
+            ("image_file_id", "TEXT NOT NULL DEFAULT ''"),
+            ("schedule_file_id", "TEXT NOT NULL DEFAULT ''"),
+        ):
+            if name not in existing:
+                await self._conn.execute(f"ALTER TABLE channels ADD COLUMN {name} {definition}")
         await self._conn.commit()
 
     async def close(self) -> None:
@@ -233,13 +245,21 @@ class Database:
         username: str = "",
         emoji: str = "📢",
         price: int = 0,
+        description: str = "",
+        image_file_id: str = "",
+        schedule_file_id: str = "",
     ) -> int:
         cur = await self._conn.execute(
             """
-            INSERT INTO channels (category_id, chat_id, username, title, emoji, price, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO channels (
+                category_id, chat_id, username, title, emoji, price,
+                description, image_file_id, schedule_file_id, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (category_id, chat_id, username, title, emoji, price, _now()),
+            (
+                category_id, chat_id, username, title, emoji, price,
+                description, image_file_id, schedule_file_id, _now(),
+            ),
         )
         await self._conn.commit()
         return int(cur.lastrowid)
@@ -263,6 +283,16 @@ class Database:
 
     async def delete_channel(self, channel_id: int) -> None:
         await self._exec("DELETE FROM channels WHERE id = ?", (channel_id,))
+
+    async def update_channel_info(
+        self, channel_id: int, price: int, description: str,
+        image_file_id: str = "", schedule_file_id: str = "",
+    ) -> None:
+        await self._exec(
+            "UPDATE channels SET price = ?, description = ?, image_file_id = ?, "
+            "schedule_file_id = ? WHERE id = ?",
+            (price, description, image_file_id, schedule_file_id, channel_id),
+        )
 
     async def set_invite_link(self, channel_id: int, invite_link: str) -> None:
         """Сохраняет постоянную ссылку канала, чтобы не создавать её заново."""
