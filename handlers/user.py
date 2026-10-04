@@ -83,7 +83,10 @@ async def catalog(call: CallbackQuery) -> None:
         await call.answer()
         return
     text = "🗂 <b>Категории курсов</b>\nВыберите категорию, чтобы увидеть каналы 👇"
-    await call.message.answer(text, reply_markup=categories_kb(cats))
+    try:
+        await call.message.edit_text(text, reply_markup=categories_kb(cats))
+    except Exception:
+        await call.message.answer(text, reply_markup=categories_kb(cats))
     await call.answer()
 
 
@@ -130,7 +133,10 @@ async def catalog_open(call: CallbackQuery) -> None:
         f"{cat['emoji']} <b>{cat['title']}</b>\n"
         "───────────────────\n" + "\n".join(rows)
     )
-    await call.message.answer(text, reply_markup=channel_links_kb(items))
+    try:
+        await call.message.edit_text(text, reply_markup=channel_links_kb(items))
+    except Exception:
+        await call.message.answer(text, reply_markup=channel_links_kb(items))
     await call.answer()
 
 
@@ -161,16 +167,28 @@ async def channel_view(call: CallbackQuery) -> None:
         except Exception as e:
             log.error("Не удалось создать ссылку для канала %s: %s", channel_id, e)
     markup = channel_category_back_kb(ch["category_id"], invite_link)
+
     if ch["schedule_file_id"]:
         try:
             await call.message.delete()
         except Exception:
             pass
         await call.message.answer_photo(
-            ch["schedule_file_id"], caption=text, reply_markup=markup
+            photo=ch["schedule_file_id"],
+            caption=text,
+            reply_markup=markup,
         )
     else:
-        await call.message.answer(text, reply_markup=markup)
+        try:
+            await call.message.edit_text(
+                text,
+                reply_markup=markup,
+            )
+        except Exception:
+            await call.message.answer(
+                text,
+                reply_markup=markup,
+            )
     await call.answer()
 
 

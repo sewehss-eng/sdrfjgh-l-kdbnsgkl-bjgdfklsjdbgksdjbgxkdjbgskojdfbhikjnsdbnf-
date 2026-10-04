@@ -251,7 +251,7 @@ class Database:
             INSERT INTO channels (
                 category_id, chat_id, username, title, emoji, price,
                 description, schedule_file_id, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 category_id, chat_id, username, title, emoji, price,
