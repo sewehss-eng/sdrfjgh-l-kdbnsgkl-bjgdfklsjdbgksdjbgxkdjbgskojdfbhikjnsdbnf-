@@ -8,6 +8,7 @@ from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
+from aiogram.exceptions import TelegramBadRequest
 
 from config import ADMIN_IDS, DEFAULT_WARN_DAYS
 from database import db
@@ -82,10 +83,13 @@ async def catalog(call: CallbackQuery) -> None:
         )
         await call.answer()
         return
-    await call.message.edit_text(
-        "🗂 <b>Категории курсов</b>\nВыберите категорию, чтобы увидеть каналы 👇",
-        reply_markup=categories_kb(cats),
-    )
+    text = "🗂 <b>Категории курсов</b>\nВыберите категорию, чтобы увидеть каналы 👇"
+    try:
+        await call.message.edit_text(text, reply_markup=categories_kb(cats))
+    except TelegramBadRequest as exc:
+        if "there is no text in the message to edit" not in str(exc):
+            raise
+        await call.message.answer(text, reply_markup=categories_kb(cats))
     await call.answer()
 
 
@@ -132,7 +136,12 @@ async def catalog_open(call: CallbackQuery) -> None:
         f"{cat['emoji']} <b>{cat['title']}</b>\n"
         "───────────────────\n" + "\n".join(rows)
     )
-    await call.message.edit_text(text, reply_markup=channel_links_kb(items))
+    try:
+        await call.message.edit_text(text, reply_markup=channel_links_kb(items))
+    except TelegramBadRequest as exc:
+        if "there is no text in the message to edit" not in str(exc):
+            raise
+        await call.message.answer(text, reply_markup=channel_links_kb(items))
     await call.answer()
 
 
@@ -172,7 +181,12 @@ async def channel_view(call: CallbackQuery) -> None:
             ch["schedule_file_id"], caption=text, reply_markup=markup
         )
     else:
+        try:
         await call.message.edit_text(text, reply_markup=markup)
+    except TelegramBadRequest as exc:
+        if "there is no text in the message to edit" not in str(exc):
+            raise
+        await call.message.answer(text, reply_markup=markup)
     await call.answer()
 
 
